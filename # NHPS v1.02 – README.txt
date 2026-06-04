@@ -1,0 +1,430 @@
+# NHPS v1.02 – README
+
+## Overview
+
+NHPS (Network Hosted PowerShell Installer) is a PowerShell-based software deployment utility designed to automate workstation setup and application installation from a centralized software repository.
+
+NHPS v1.02 builds on NHPS v1.01 by adding centralized post-install processing, Office registry configuration, GlassTrax configuration deployment, and improved retry handling.
+
+---
+
+# Features
+
+## Automatic Elevation
+
+NHPS automatically relaunches itself with administrative privileges if started from a non-elevated PowerShell session.
+
+Benefits:
+
+* Eliminates the need to manually launch PowerShell as Administrator
+* Ensures all installation and configuration tasks have proper permissions
+* Provides a consistent execution environment
+
+---
+
+## Network-Based Installer Repository
+
+Installers are loaded directly from a centralized network share.
+
+Example:
+
+```powershell
+\\Server\Apps\Installers
+```
+
+Benefits:
+
+* Single source for approved software
+* Easier version control
+* Simplified maintenance
+
+---
+
+## Automatic EXE Discovery
+
+NHPS scans the configured installation directory and processes all executable files found.
+
+```powershell
+Get-ChildItem -Filter *.exe
+```
+
+Benefits:
+
+* No hardcoded installer list required
+* Easy software additions and removals
+* Reduced maintenance
+
+---
+
+## Per-Installer Silent Install Arguments
+
+Different installers often require different silent install parameters.
+
+NHPS supports installer-specific arguments through a lookup table.
+
+Example:
+
+```powershell
+$InstallerArguments = @{
+    "AnyDesk.exe" = "--silent"
+    "OfficeSetup.exe" = "/configure configuration.xml"
+}
+```
+
+Unspecified installers use a default argument set.
+
+---
+
+## Detailed Logging
+
+Each execution generates a machine-specific installation log.
+
+Format:
+
+```text
+COMPUTERNAME_InstallLog.txt
+```
+
+Example:
+
+```text
+PC-123_InstallLog.txt
+```
+
+Logged information includes:
+
+* Start time
+* End time
+* Computer name
+* User account
+* Installer name
+* Installer arguments
+* Exit codes
+* Retry attempts
+* Skipped installations
+* Post-install actions
+* Registry modifications
+* Reboot requirements
+
+---
+
+# Installer Exit Code Handling
+
+NHPS recognizes common installation success codes.
+
+| Exit Code | Meaning                                   |
+| --------- | ----------------------------------------- |
+| 0         | Successful installation                   |
+| 3010      | Successful installation, reboot required  |
+| 1641      | Successful installation, reboot initiated |
+
+Any other exit code is treated as a failure.
+
+---
+
+# Error Handling
+
+When an installer fails, NHPS provides the following options:
+
+```text
+[S] Skip
+[R] Retry
+[Q] Quit
+```
+
+Benefits:
+
+* Prevents a single failure from terminating the deployment
+* Allows operator intervention when necessary
+* Provides flexibility during workstation setup
+
+---
+
+# Retry Handling Improvements
+
+NHPS v1.02 ensures that successful retries receive the same post-install processing as first-attempt successes.
+
+Examples:
+
+* Office registry configuration
+* GlassTrax datapath deployment
+* Future software-specific actions
+
+This behavior was not fully implemented in NHPS v1.01.
+
+---
+
+# Post-Install Action Framework
+
+NHPS v1.02 introduces centralized post-install processing.
+
+Function:
+
+```powershell
+Invoke-PostInstallActions
+```
+
+Benefits:
+
+* Cleaner code structure
+* Easier maintenance
+* Simplified future enhancements
+
+All software-specific actions are managed from a single location.
+
+---
+
+# GlassTrax Configuration Deployment
+
+After successful installation of:
+
+```text
+GlassTraxUpdate1.35.2214.exe
+```
+
+NHPS automatically copies:
+
+```text
+datapath.ini
+```
+
+from the installer repository to:
+
+```text
+C:\GTFiles\datapath.ini
+```
+
+Purpose:
+
+* Ensures GlassTrax points to the proper data location
+* Standardizes workstation configuration
+* Eliminates manual setup steps
+
+Function:
+
+```powershell
+Copy-GlassTraxDataPath
+```
+
+---
+
+# Office Registry Configuration
+
+After successful installation of:
+
+```text
+OfficeSetup.exe
+```
+
+NHPS automatically updates:
+
+```text
+HKLM\SOFTWARE\Microsoft\Cryptography\Protect\Providers\
+df9d8cd0-1501-11d1-8c7a-00c04fc297eb
+```
+
+Registry Value:
+
+```text
+ProtectionPolicy
+```
+
+Type:
+
+```text
+REG_DWORD
+```
+
+Value:
+
+```text
+1
+```
+
+Function:
+
+```powershell
+Set-OfficeProtectionPolicy
+```
+
+Purpose:
+
+* Standardize Office configuration
+* Apply required protection policy settings
+* Eliminate manual registry edits
+
+---
+
+# Reboot Detection
+
+NHPS tracks installations requiring a reboot.
+
+At completion:
+
+```text
+REBOOT REQUIRED: Yes
+```
+
+or
+
+```text
+REBOOT REQUIRED: No
+```
+
+is written to the log.
+
+Users are also notified in the console.
+
+---
+
+# Recommended Folder Structure
+
+```text
+Installers
+│
+├── AnyDesk.exe
+├── OfficeSetup.exe
+├── configuration.xml
+├── GlassTraxUpdate1.35.2214.exe
+├── datapath.ini
+├── zsu-1191297.exe
+└── NHPS_v1.02.ps1
+```
+
+---
+
+# Best Practices
+
+## Recommended
+
+* Run only approved software packages
+* Use UNC paths instead of mapped drives
+* Test new installers before production use
+* Maintain installer version consistency
+* Review logs after deployment
+* Keep installer filenames consistent
+
+## Avoid
+
+* Hardcoded passwords
+* Mixed production and test installers
+* Running unknown executables
+* Modifying post-install functions without testing
+
+---
+
+# Common Troubleshooting
+
+## Installer Opens Normally Instead of Installing
+
+Cause:
+
+Incorrect silent install argument.
+
+Resolution:
+
+Review vendor documentation or test:
+
+```powershell
+Installer.exe /?
+```
+
+---
+
+## Network Share Cannot Be Accessed
+
+Cause:
+
+Permission or connectivity issue.
+
+Resolution:
+
+Verify:
+
+* Network connectivity
+* Share permissions
+* UNC path configuration
+
+---
+
+## Registry Update Fails
+
+Cause:
+
+Insufficient permissions or unexpected system configuration.
+
+Resolution:
+
+* Confirm NHPS is running elevated
+* Verify registry path exists
+* Review installation log
+
+---
+
+## datapath.ini Not Copied
+
+Cause:
+
+File missing from installer repository.
+
+Resolution:
+
+Verify:
+
+```text
+datapath.ini
+```
+
+exists in the installation folder.
+
+---
+
+# Version History
+
+## NHPS v1.01
+
+Initial release including:
+
+* Automatic installer execution
+* Logging
+* Self-elevation
+* Silent install support
+* Error handling
+* Reboot detection
+
+---
+
+## NHPS v1.02
+
+Added:
+
+* `Invoke-PostInstallActions`
+* `Copy-GlassTraxDataPath`
+* `Set-OfficeProtectionPolicy`
+* Retry-aware post-install processing
+* Centralized installer-specific actions
+* Improved maintainability and scalability
+
+---
+
+# Future Enhancement Ideas
+
+Potential future improvements:
+
+* CSV reporting
+* Transcript logging
+* Software installation verification
+* Installer hash validation
+* Email reporting
+* Scheduled deployment mode
+* MSI-specific handling
+* Application dependency management
+* Centralized deployment reporting
+
+---
+
+# Notes
+
+NHPS v1.02 is intended for internal Arrow deployment and workstation setup processes.
+
+Always test new installers and configuration changes in a non-production environment before broad deployment.
