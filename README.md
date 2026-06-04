@@ -1,68 +1,85 @@
-# Install All EXEs Script - README
+# NHPS v1.02 – README
 
 ## Overview
 
-This PowerShell script automatically installs all `.exe` files located in a specified folder. It includes:
+NHPS (Network Hosted PowerShell Installer) is a PowerShell-based software deployment utility designed to automate workstation setup and application installation from a centralized software repository.
 
-* Administrator privilege validation
-* Per-installer silent install arguments
-* Detailed logging
-* Error handling
-* Retry, Skip, and Quit options
-* Reboot detection and warning
-* PC-name-based log files
+NHPS v1.02 builds on NHPS v1.01 by adding centralized post-install processing, Office registry configuration, GlassTrax configuration deployment, and improved retry handling.
 
 ---
 
 # Features
 
-## Automatic EXE Detection
+## Automatic Elevation
 
-The script scans the configured installation directory for all `.exe` files.
+NHPS automatically relaunches itself with administrative privileges if started from a non-elevated PowerShell session.
+
+Benefits:
+
+* Eliminates the need to manually launch PowerShell as Administrator
+* Ensures all installation and configuration tasks have proper permissions
+* Provides a consistent execution environment
+
+---
+
+## Network-Based Installer Repository
+
+Installers are loaded directly from a centralized network share.
 
 Example:
 
 ```powershell
-$Executables = Get-ChildItem -Path $InstallerFolder -Filter *.exe -File
+\\Server\Apps\Installers
 ```
 
----
+Benefits:
 
-## Administrator Rights Validation
-
-The script checks whether PowerShell is running as Administrator before continuing.
-
-If PowerShell is not elevated, the script exits safely.
+* Single source for approved software
+* Easier version control
+* Simplified maintenance
 
 ---
 
-## Per-Installer Silent Switch Support
+## Automatic EXE Discovery
 
-Different installers require different silent install switches.
+NHPS scans the configured installation directory and processes all executable files found.
 
-The script allows custom arguments per installer:
+```powershell
+Get-ChildItem -Filter *.exe
+```
+
+Benefits:
+
+* No hardcoded installer list required
+* Easy software additions and removals
+* Reduced maintenance
+
+---
+
+## Per-Installer Silent Install Arguments
+
+Different installers often require different silent install parameters.
+
+NHPS supports installer-specific arguments through a lookup table.
+
+Example:
 
 ```powershell
 $InstallerArguments = @{
-    "ChromeSetup.exe"              = "/silent /install"
-    "GlassTraxUpdate1.35.2214.exe" = "/silent /norestart"
-    "zsu-1191297.exe"              = "/silent /norestart"
+    "AnyDesk.exe" = "--silent"
+    "OfficeSetup.exe" = "/configure configuration.xml"
 }
 ```
 
-Any installer not listed uses the default arguments:
-
-```powershell
-$DefaultArguments = "/silent /norestart"
-```
+Unspecified installers use a default argument set.
 
 ---
 
-## Logging
+## Detailed Logging
 
-A detailed log file is created automatically.
+Each execution generates a machine-specific installation log.
 
-Log file format:
+Format:
 
 ```text
 COMPUTERNAME_InstallLog.txt
@@ -71,28 +88,43 @@ COMPUTERNAME_InstallLog.txt
 Example:
 
 ```text
-DESKTOP-01_InstallLog.txt
+PC-123_InstallLog.txt
 ```
 
-The log includes:
+Logged information includes:
 
 * Start time
 * End time
 * Computer name
-* User account running the script
+* User account
 * Installer name
-* Silent arguments used
+* Installer arguments
 * Exit codes
-* Errors
 * Retry attempts
 * Skipped installations
+* Post-install actions
+* Registry modifications
 * Reboot requirements
 
 ---
 
-## Error Handling
+# Installer Exit Code Handling
 
-If an installer fails, the script provides options:
+NHPS recognizes common installation success codes.
+
+| Exit Code | Meaning                                   |
+| --------- | ----------------------------------------- |
+| 0         | Successful installation                   |
+| 3010      | Successful installation, reboot required  |
+| 1641      | Successful installation, reboot initiated |
+
+Any other exit code is treated as a failure.
+
+---
+
+# Error Handling
+
+When an installer fails, NHPS provides the following options:
 
 ```text
 [S] Skip
@@ -100,63 +132,164 @@ If an installer fails, the script provides options:
 [Q] Quit
 ```
 
-This prevents one failed installer from stopping the entire deployment.
+Benefits:
+
+* Prevents a single failure from terminating the deployment
+* Allows operator intervention when necessary
+* Provides flexibility during workstation setup
 
 ---
 
-## Reboot Detection
+# Retry Handling Improvements
 
-The script detects common reboot-required exit codes:
+NHPS v1.02 ensures that successful retries receive the same post-install processing as first-attempt successes.
 
-| Exit Code | Meaning                   |
-| --------- | ------------------------- |
-| 3010      | Reboot required           |
-| 1641      | Reboot initiated/required |
+Examples:
 
-At the end of execution, the script warns the user if a reboot is needed.
+* Office registry configuration
+* GlassTrax datapath deployment
+* Future software-specific actions
 
----
-
-# Installation Folder Configuration
-
-Current example:
-
-```powershell
-$InstallerFolder = "C:\Users\WDAGUtilityAccount\Desktop\Instalation"
-```
-
-For production environments, UNC paths are recommended.
-
-Recommended:
-
-```powershell
-$InstallerFolder = "\\FileServer01\Software\Installers"
-```
-
-Avoid mapped drives when running elevated PowerShell sessions.
+This behavior was not fully implemented in NHPS v1.01.
 
 ---
 
-# Recommended Silent Switch Testing
+# Post-Install Action Framework
 
-Before adding an installer to production deployment, test supported silent switches manually.
+NHPS v1.02 introduces centralized post-install processing.
 
-Common tests:
+Function:
 
 ```powershell
-Installer.exe /?
-Installer.exe -?
-Installer.exe /help
+Invoke-PostInstallActions
 ```
 
-Common silent switches:
+Benefits:
 
-| Installer Type          | Common Switch |
-| ----------------------- | ------------- |
-| NSIS                    | /S            |
-| MSI Wrapper             | /quiet        |
-| InstallShield           | /s            |
-| Custom Vendor Installer | /silent       |
+* Cleaner code structure
+* Easier maintenance
+* Simplified future enhancements
+
+All software-specific actions are managed from a single location.
+
+---
+
+# GlassTrax Configuration Deployment
+
+After successful installation of:
+
+```text
+GlassTraxUpdate1.35.2214.exe
+```
+
+NHPS automatically copies:
+
+```text
+datapath.ini
+```
+
+from the installer repository to:
+
+```text
+C:\GTFiles\datapath.ini
+```
+
+Purpose:
+
+* Ensures GlassTrax points to the proper data location
+* Standardizes workstation configuration
+* Eliminates manual setup steps
+
+Function:
+
+```powershell
+Copy-GlassTraxDataPath
+```
+
+---
+
+# Office Registry Configuration
+
+After successful installation of:
+
+```text
+OfficeSetup.exe
+```
+
+NHPS automatically updates:
+
+```text
+HKLM\SOFTWARE\Microsoft\Cryptography\Protect\Providers\
+df9d8cd0-1501-11d1-8c7a-00c04fc297eb
+```
+
+Registry Value:
+
+```text
+ProtectionPolicy
+```
+
+Type:
+
+```text
+REG_DWORD
+```
+
+Value:
+
+```text
+1
+```
+
+Function:
+
+```powershell
+Set-OfficeProtectionPolicy
+```
+
+Purpose:
+
+* Standardize Office configuration
+* Apply required protection policy settings
+* Eliminate manual registry edits
+
+---
+
+# Reboot Detection
+
+NHPS tracks installations requiring a reboot.
+
+At completion:
+
+```text
+REBOOT REQUIRED: Yes
+```
+
+or
+
+```text
+REBOOT REQUIRED: No
+```
+
+is written to the log.
+
+Users are also notified in the console.
+
+---
+
+# Recommended Folder Structure
+
+```text
+Installers
+│
+├── AnyDesk.exe
+├── OfficeSetup.exe
+├── configuration.xml
+├── GlassTraxUpdate1.35.2214.exe
+├── datapath.ini
+├── zsu-1191297.exe
+└── NHPS_v1.02.ps1
+```
 
 ---
 
@@ -164,57 +297,33 @@ Common silent switches:
 
 ## Recommended
 
-* Run PowerShell as Administrator
-* Use local admin or deployment accounts instead of Domain Admin when possible
-* Store installers in a secured folder
-* Keep logs for troubleshooting
-* Test installers individually before deployment
+* Run only approved software packages
 * Use UNC paths instead of mapped drives
-* Verify installer hashes for production deployments
+* Test new installers before production use
+* Maintain installer version consistency
+* Review logs after deployment
+* Keep installer filenames consistent
 
 ## Avoid
 
-* Hardcoding passwords
-* Running unknown EXE files
-* Mixing production and test installers in the same folder
-* Using inconsistent installer naming
+* Hardcoded passwords
+* Mixed production and test installers
+* Running unknown executables
+* Modifying post-install functions without testing
 
 ---
 
 # Common Troubleshooting
 
-## Mapped Drive Not Found
-
-Problem:
-
-```text
-Path not found
-```
+## Installer Opens Normally Instead of Installing
 
 Cause:
-Elevated PowerShell sessions cannot always see mapped drives.
 
-Solution:
-Use a UNC path.
+Incorrect silent install argument.
 
-Example:
+Resolution:
 
-```powershell
-\\Server\Share\Installers
-```
-
----
-
-## Installer Does Not Install Silently
-
-Problem:
-Installer opens normal GUI.
-
-Cause:
-Incorrect silent switch.
-
-Solution:
-Check vendor documentation or test:
+Review vendor documentation or test:
 
 ```powershell
 Installer.exe /?
@@ -222,63 +331,100 @@ Installer.exe /?
 
 ---
 
-## Access Denied
-
-Problem:
-
-```text
-Access is denied
-```
+## Network Share Cannot Be Accessed
 
 Cause:
-PowerShell not running elevated.
 
-Solution:
-Run PowerShell as Administrator.
+Permission or connectivity issue.
 
----
+Resolution:
 
-# Example Workflow
+Verify:
 
-1. Copy installers into the installation folder
-2. Update installer silent switches if needed
-3. Open PowerShell as Administrator
-4. Run the script
-5. Review the generated log file
-6. Reboot if required
+* Network connectivity
+* Share permissions
+* UNC path configuration
 
 ---
 
-# Future Enhancement Suggestions
+## Registry Update Fails
 
-Potential future upgrades:
+Cause:
 
-* Automatic software detection
-* Installed application verification
-* Installer hash verification
-* HTML reporting
-* Email notification support
-* Parallel installations
-* MSI support
-* SCCM/Intune integration
+Insufficient permissions or unexpected system configuration.
+
+Resolution:
+
+* Confirm NHPS is running elevated
+* Verify registry path exists
+* Review installation log
+
+---
+
+## datapath.ini Not Copied
+
+Cause:
+
+File missing from installer repository.
+
+Resolution:
+
+Verify:
+
+```text
+datapath.ini
+```
+
+exists in the installation folder.
+
+---
+
+# Version History
+
+## NHPS v1.01
+
+Initial release including:
+
+* Automatic installer execution
+* Logging
+* Self-elevation
+* Silent install support
+* Error handling
+* Reboot detection
+
+---
+
+## NHPS v1.02
+
+Added:
+
+* `Invoke-PostInstallActions`
+* `Copy-GlassTraxDataPath`
+* `Set-OfficeProtectionPolicy`
+* Retry-aware post-install processing
+* Centralized installer-specific actions
+* Improved maintainability and scalability
+
+---
+
+# Future Enhancement Ideas
+
+Potential future improvements:
+
+* CSV reporting
+* Transcript logging
+* Software installation verification
+* Installer hash validation
+* Email reporting
 * Scheduled deployment mode
-* Centralized logging
-
----
-
-# Exit Code Reference
-
-| Exit Code | Meaning                   |
-| --------- | ------------------------- |
-| 0         | Success                   |
-| 3010      | Success, reboot required  |
-| 1641      | Success, reboot initiated |
-| Other     | Installer-specific error  |
+* MSI-specific handling
+* Application dependency management
+* Centralized deployment reporting
 
 ---
 
 # Notes
 
-This script is intended for internal administrative deployment use.
+NHPS v1.02 is intended for internal Arrow deployment and workstation setup processes.
 
-Always test installers in a non-production environment before large-scale deployment.
+Always test new installers and configuration changes in a non-production environment before broad deployment.
